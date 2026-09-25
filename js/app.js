@@ -58,15 +58,20 @@
     const body = Object.assign({ action, code: session && session.code }, payload);
     if (DEMO) return MockApi.call(action, body);
     let res;
+    const ctrl = window.AbortController ? new AbortController() : null;
+    const timer = ctrl && setTimeout(() => ctrl.abort(), action === 'submitReport' ? 120000 : 45000);
     try {
       res = await fetch(window.CONFIG.API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // "simple" request: no CORS preflight
         body: JSON.stringify(body),
         redirect: 'follow',
+        signal: ctrl ? ctrl.signal : undefined,
       });
     } catch (e) {
-      throw new Error('אין חיבור לאינטרנט. נסה שוב.');
+      throw new Error(e && e.name === 'AbortError' ? 'השרת לא הגיב בזמן. נסה שוב.' : 'אין חיבור לאינטרנט. נסה שוב.');
+    } finally {
+      clearTimeout(timer);
     }
     let data;
     try { data = await res.json(); } catch (e) { throw new Error('תקלה בתקשורת עם השרת. נסה שוב.'); }
@@ -144,8 +149,8 @@
         session.role = res.role;
         store.set(LS_SESSION, session);
         if (res.role === 'rep') { repData = res; store.set(LS_CACHE, res); }
-        location.hash = res.role === 'admin' ? '#admin/reports' : '#home';
-        route();
+        const target = res.role === 'admin' ? '#admin/reports' : '#home';
+        if (location.hash === target) route(); else location.hash = target; // hashchange renders once
       } catch (err) {
         session = null;
         busy(btn, false);

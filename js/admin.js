@@ -13,21 +13,34 @@
   const repName = (id) => (data.reps.find(r => r.id === id) || {}).name || '—';
   const statusPill = (active) => `<span class="pill ${active ? '' : 'off'}">${active ? 'פעיל' : 'לא פעיל'}</span>`;
 
+  let loading = null; // in-flight adminData request, shared so double renders don't refetch
+
   async function loadData() {
     try {
       data = await api('adminData');
       return true;
     } catch (err) {
-      if (err.auth) { App.logout(); toast('הקוד אינו תקף. יש להתחבר מחדש.', true); } else toast(err.message, true);
+      if (err.auth) { App.logout(); toast('הקוד אינו תקף. יש להתחבר מחדש.', true); return false; }
+      showLoadError(err.message);
       return false;
     }
+  }
+
+  function showLoadError(msg) {
+    const app = mount(shell(`<div class="empty" style="margin-top:24px">
+        <p style="margin:0 0 16px;color:var(--ink-2)">${esc(msg)}</p>
+        <button class="btn" id="retry">נסה שוב</button></div>`, { user: 'מנהל', wide: true }));
+    $('#retry', app).onclick = () => render(location.hash.slice(7) || 'reports');
   }
 
   async function render(tab) {
     if (!TABS.some(([k]) => k === tab)) tab = 'reports';
     if (!data) {
-      mount(`<div class="center-load"><span class="spinner"></span></div>`);
-      if (!(await loadData())) return;
+      mount(`<div class="center-load" style="flex-direction:column;align-items:center;gap:14px">
+        <span class="spinner"></span><span class="muted small">טוען נתונים…</span></div>`);
+      loading = loading || loadData().finally(() => { loading = null; });
+      if (!(await loading) || !data) return;
+      if (('#admin/' + tab) !== location.hash && location.hash.startsWith('#admin/')) return; // a newer render took over
     }
     const app = mount(shell(`
       <div class="page-head"><p class="eyebrow">ממשק ניהול</p><h1>${esc(data.appName)}</h1></div>
