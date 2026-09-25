@@ -67,6 +67,18 @@
       });
       return { saved: true };
     },
+    updateReport(db, p) {
+      const r = rep(db, p.code);
+      const x = p.report || {};
+      const row = db.reports.find(y => y.id === x.id) || fail('הדיווח לא נמצא');
+      if (row.repId !== r.id) fail('ניתן לערוך רק דיווחים שלך');
+      const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('הלקוח לא נמצא');
+      const t = db.topics.find(t => t.id === x.topicId) || fail('יש לבחור נושא');
+      const kept = (row.photos || []).filter(ph => (x.keepPhotos || []).includes(ph.url));
+      Object.assign(row, { customerId: c.id, customerName: c.name, topic: t.name, text: x.text || '', updatedAt: new Date().toISOString(),
+        photos: kept.concat((x.photos || []).map(() => ({ url: '#', thumb: '' }))) });
+      return { saved: true };
+    },
     myReports(db, p) { return { reports: myReports(db, rep(db, p.code)) }; },
     adminData(db, p) {
       admin(db, p.code);

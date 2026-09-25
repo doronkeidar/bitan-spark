@@ -167,12 +167,15 @@
       `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer"></a>`).join('');
     const n = (r.photos || []).length;
     const photoNote = n && !photos ? `<div class="small muted" style="margin-top:8px">${n === 1 ? 'תמונה אחת מצורפת' : `${n} תמונות מצורפות`}</div>` : '';
+    const edited = r.updatedAt ? ` · עודכן ${esc(when(r.updatedAt))}` : '';
+    const edit = opts.editable ? `<button type="button" class="link-btn accent" data-edit="${esc(r.id)}" style="margin-top:10px">עריכה</button>` : '';
     return `<article class="report">
-      <div class="report-head"><h3>${esc(r.customerName)}</h3><span class="report-meta">${esc(when(r.createdAt))}</span></div>
+      <div class="report-head"><h3>${esc(r.customerName)}</h3><span class="report-meta">${esc(when(r.createdAt))}${edited}</span></div>
       ${opts.showRep ? `<div class="small" style="margin:-2px 0 6px;color:var(--ink-2)">${esc(r.repName)}</div>` : ''}
       <span class="tag">${esc(r.topic)}</span>
       ${r.text ? `<p class="report-text ${opts.clamp ? 'clamp' : ''}">${esc(r.text)}</p>` : ''}
       ${photos ? `<div class="report-photos">${photos}</div>` : photoNote}
+      ${edit}
     </article>`;
   }
 
@@ -183,7 +186,7 @@
       ? `<div class="status done"><span>נשלחו היום <b>${today}</b> ${today === 1 ? 'דיווח' : 'דיווחים'}</span></div>`
       : `<div class="status"><span>טרם נשלח דיווח היום</span></div>`;
     const list = (d.reports || []).length
-      ? `<div class="report-list">${d.reports.slice(0, 20).map(r => reportCard(r, { clamp: true })).join('')}</div>`
+      ? `<div class="report-list">${d.reports.slice(0, 20).map(r => reportCard(r, { clamp: true, editable: true })).join('')}</div>`
       : `<div class="empty">עדיין לא נשלחו דיווחים</div>`;
     const app = mount(shell(`
       <div class="page-head"><p class="eyebrow">${esc(longToday())}</p><h1>שלום, ${esc(d.rep.name)}</h1></div>
@@ -191,6 +194,7 @@
       <a class="btn block lg" href="#new">דיווח חדש</a>
       <div class="section-title"><h2>הדיווחים האחרונים שלי</h2><button class="link-btn" data-act="refresh">רענון</button></div>
       ${list}`, { user: d.rep.name }));
+    $$('[data-edit]', app).forEach(b => b.onclick = () => { location.hash = '#edit/' + b.dataset.edit; });
     $('[data-act="refresh"]', app).onclick = async (e) => {
       busy(e.target, true);
       await refreshRep(true);
@@ -214,16 +218,29 @@
 
   /* ------------------------------------------------------------ rep: new report */
 
+  // draft.mode: 'new' | 'edit'. keep = photos already saved on the report (edit mode) that stay attached.
   let draft = null;
-  const newDraft = () => ({ clientId: uid(), customerId: '', topicId: '', text: '', photos: [] });
+  const newDraft = () => ({ mode: 'new', clientId: uid(), customerId: '', topicId: '', text: '', photos: [], keep: [] });
+  const editDraft = (r) => {
+    const topic = repData.topics.find(t => t.name === r.topic);
+    return { mode: 'edit', id: r.id, customerId: r.customerId || '', topicId: topic ? topic.id : '', text: r.text || '', photos: [], keep: (r.photos || []).slice(), createdAt: r.createdAt };
+  };
+
+  function renderEdit(id) {
+    const r = (repData.reports || []).find(x => x.id === id);
+    if (!r) { location.hash = '#home'; return; }
+    if (!draft || draft.mode !== 'edit' || draft.id !== id) draft = editDraft(r);
+    renderNew();
+  }
 
   function renderNew() {
-    if (!draft) draft = newDraft();
+    if (!draft || (draft.mode === 'edit' && location.hash === '#new')) draft = newDraft();
     const d = repData;
+    const editing = draft.mode === 'edit';
     const app = mount(shell(`
       <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
-        <div><p class="eyebrow">${esc(longToday())}</p><h1>דיווח חדש</h1></div>
-        <a class="link-btn" href="#home">חזרה</a>
+        <div><p class="eyebrow">${esc(editing ? `דיווח מ${when(draft.createdAt)}` : longToday())}</p><h1>${editing ? 'עריכת דיווח' : 'דיווח חדש'}</h1></div>
+        <a class="link-btn" href="#home">${editing ? 'ביטול' : 'חזרה'}</a>
       </div>
       <div class="card">
         <section class="step">
@@ -248,7 +265,7 @@
           <button type="button" class="btn secondary block" id="add-photo">הוספת תמונה</button>
         </section>
       </div>
-      <div class="submit-bar"><button class="btn block lg" id="submit">שליחת הדיווח</button></div>`, { user: d.rep.name }));
+      <div class="submit-bar"><button class="btn block lg" id="submit">${editing ? 'שמירת השינויים' : 'שליחת הדיווח'}</button></div>`, { user: d.rep.name }));
 
     renderCustomerStep();
     $$('.chip[data-topic]', app).forEach(ch => ch.onclick = () => {
@@ -293,18 +310,22 @@
     draw();
   }
 
+  const photoCount = () => draft.photos.length + draft.keep.length;
+
   function renderPhotos() {
     const grid = $('#photos');
-    grid.innerHTML = draft.photos.map((p, i) =>
-      `<div class="photo"><img src="${p.dataUrl}" alt="תמונה ${i + 1}"><button type="button" data-i="${i}">הסרה</button></div>`).join('');
-    $$('button', grid).forEach(b => b.onclick = () => { draft.photos.splice(Number(b.dataset.i), 1); renderPhotos(); });
+    grid.innerHTML =
+      draft.keep.map((p, i) => `<div class="photo"><img src="${esc(p.thumb)}" alt="תמונה ${i + 1}" referrerpolicy="no-referrer"><button type="button" data-k="${i}">הסרה</button></div>`).join('') +
+      draft.photos.map((p, i) => `<div class="photo"><img src="${p.dataUrl}" alt="תמונה חדשה ${i + 1}"><button type="button" data-i="${i}">הסרה</button></div>`).join('');
+    $$('button[data-k]', grid).forEach(b => b.onclick = () => { draft.keep.splice(Number(b.dataset.k), 1); renderPhotos(); });
+    $$('button[data-i]', grid).forEach(b => b.onclick = () => { draft.photos.splice(Number(b.dataset.i), 1); renderPhotos(); });
     const add = $('#add-photo');
-    add.hidden = draft.photos.length >= MAX_PHOTOS;
-    add.textContent = draft.photos.length ? 'הוספת תמונה נוספת' : 'הוספת תמונה';
+    add.hidden = photoCount() >= MAX_PHOTOS;
+    add.textContent = photoCount() ? 'הוספת תמונה נוספת' : 'הוספת תמונה';
   }
 
   async function onFiles(e) {
-    const files = Array.from(e.target.files || []).slice(0, MAX_PHOTOS - draft.photos.length);
+    const files = Array.from(e.target.files || []).slice(0, MAX_PHOTOS - photoCount());
     e.target.value = '';
     const add = $('#add-photo');
     busy(add, true, 'מעבד תמונות…');
@@ -340,17 +361,18 @@
     draft.text = $('#text').value;
     if (!draft.customerId) return toast('יש לבחור לקוח', true);
     if (!draft.topicId) return toast('יש לבחור נושא', true);
-    if (!draft.text.trim() && !draft.photos.length) return toast('יש להוסיף פירוט או תמונה', true);
-    busy(btn, true, 'שולח…');
+    if (!draft.text.trim() && !photoCount()) return toast('יש להוסיף פירוט או תמונה', true);
+    const editing = draft.mode === 'edit';
+    busy(btn, true, editing ? 'שומר…' : 'שולח…');
     try {
-      await api('submitReport', {
-        report: {
-          clientId: draft.clientId, customerId: draft.customerId, topicId: draft.topicId, text: draft.text.trim(),
-          photos: draft.photos.map(p => ({ data: p.data, mime: p.mime })),
-        },
-      });
+      const report = {
+        customerId: draft.customerId, topicId: draft.topicId, text: draft.text.trim(),
+        photos: draft.photos.map(p => ({ data: p.data, mime: p.mime })),
+      };
+      if (editing) await api('updateReport', { report: Object.assign(report, { id: draft.id, keepPhotos: draft.keep.map(p => p.url) }) });
+      else await api('submitReport', { report: Object.assign(report, { clientId: draft.clientId }) });
       draft = null;
-      toast('הדיווח נשלח בהצלחה');
+      toast(editing ? 'הדיווח עודכן' : 'הדיווח נשלח בהצלחה');
       await refreshRep(false);
       location.hash = '#home';
     } catch (err) {
@@ -367,7 +389,9 @@
     // iOS Safari ends a non-continuous session instantly; an immediate restart there spins and freezes the page.
     const ANDROID = /Android/i.test(navigator.userAgent);
     const MAX_RESTARTS = 40;
-    let rec = null, listening = false, base = '', sessionFinal = '', ta = null, onChange = null, stopTimer = null;
+    // sessionText = everything heard in the current session (final + interim). iOS often never marks results
+    // final before stop(), so we keep what is on screen rather than only "final" results.
+    let rec = null, listening = false, base = '', sessionText = '', ta = null, onChange = null, stopTimer = null;
     let restarts = 0, startedAt = 0, restartTimer = null;
 
     const join = (a, b) => (a && b ? a.replace(/\s+$/, '') + ' ' + b.trim() : (a || '') + (b || '').trim());
@@ -389,13 +413,10 @@
       startedAt = Date.now();
       rec.onresult = (e) => {
         if (!listening) return;
-        let fin = '', interim = '';
-        for (let i = 0; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) fin += t; else interim += t;
-        }
-        sessionFinal = fin;
-        ta.value = join(base, fin + interim);
+        let text = '';
+        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        sessionText = text;
+        ta.value = join(base, text);
         onChange(ta.value);
       };
       rec.onerror = (e) => {
@@ -411,8 +432,8 @@
         }
       };
       rec.onend = () => {
-        base = join(base, sessionFinal);
-        sessionFinal = '';
+        base = join(base, sessionText);
+        sessionText = '';
         ta.value = base;
         onChange(base);
         // Restart only while still recording, never in a tight loop: sessions that die instantly stop the recording.
@@ -444,6 +465,10 @@
     function stop() {
       if (!listening) return;
       listening = false;
+      // Keep exactly what the user sees; late events from the recognizer must not overwrite it.
+      base = ta.value;
+      sessionText = '';
+      onChange(base);
       clearTimeout(stopTimer);
       clearTimeout(restartTimer);
       try { rec && rec.stop(); } catch (e) { /* already stopped */ }
@@ -481,6 +506,7 @@
     }
     if (!repData) return renderLogin();
     if (h === '#new') return renderNew();
+    if (h.startsWith('#edit/')) return renderEdit(decodeURIComponent(h.slice(6)));
     return renderHome();
   }
 
@@ -493,7 +519,7 @@
     if (session && session.role === 'rep') {
       if (repData) route(); else mount(`<div class="center-load"><span class="spinner"></span></div>`);
       const ok = await refreshRep(false);
-      if (ok && location.hash !== '#new') route();
+      if (ok && location.hash !== '#new' && !location.hash.startsWith('#edit/')) route();
       else if (!repData && session) renderLogin();
       return;
     }
