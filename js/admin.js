@@ -18,12 +18,29 @@
 
   const defaultRange = () => ({ from: dateOffset(-6), to: dateOffset(0) });
 
+  const LS_ADMIN = 'bs_admin_cache';
+  const saveCache = (res) => { try { localStorage.setItem(LS_ADMIN, JSON.stringify(res)); } catch (e) { /* full or blocked */ } };
+  const readCache = () => { try { return JSON.parse(localStorage.getItem(LS_ADMIN)); } catch (e) { return null; } };
+
   /** Take a bundle (login or adminData response): panel data + reports for its range. */
   function prime(res) {
     data = res;
     reportsFilter = { from: res.range ? res.range.from : dateOffset(-6), to: res.range ? res.range.to : dateOffset(0), repId: '' };
     lastReports = res.reports || [];
     primed = true;
+    saveCache(res);
+  }
+
+  /** Show last session's data instantly, then refresh from the server and redraw if nothing is being edited. */
+  async function refreshInBackground() {
+    try {
+      const res = await api('adminData', defaultRange());
+      const busyEditing = $('#modal-root').children.length || document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      prime(res);
+      if (!busyEditing && location.hash.startsWith('#admin/')) render(location.hash.slice(7));
+    } catch (err) {
+      if (err.auth) { App.logout(); toast('הקוד אינו תקף. יש להתחבר מחדש.', true); }
+    }
   }
 
   async function loadData() {
@@ -46,6 +63,13 @@
 
   async function render(tab) {
     if (!TABS.some(([k]) => k === tab)) tab = 'reports';
+    if (!data) {
+      const cached = readCache();
+      if (cached && cached.reps) {
+        prime(cached);
+        refreshInBackground();
+      }
+    }
     if (!data) {
       mount(`<div class="center-load" style="flex-direction:column;align-items:center;gap:14px">
         <span class="spinner"></span><span class="muted small">טוען נתונים…</span></div>`);
@@ -387,5 +411,8 @@
     });
   }
 
-  window.Admin = { render, prime, defaultRange, reset() { data = null; reportsFilter = null; lastReports = []; primed = false; } };
+  window.Admin = {
+    render, prime, defaultRange,
+    reset() { data = null; reportsFilter = null; lastReports = []; primed = false; try { localStorage.removeItem(LS_ADMIN); } catch (e) { /* ignore */ } },
+  };
 })();

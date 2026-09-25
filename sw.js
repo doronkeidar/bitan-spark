@@ -1,6 +1,6 @@
 // Network-first for the app shell (updates reach reps immediately), cache as offline fallback.
 // Bump CACHE when shipping a new version.
-const CACHE = 'bs-field-v3';
+const CACHE = 'bs-field-v4';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/mock.js', 'js/app.js', 'js/admin.js',
   'assets/logo.svg', 'assets/icon-192.png', 'manifest.webmanifest'];
 
