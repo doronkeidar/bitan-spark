@@ -129,7 +129,7 @@
         <h1>כניסה למערכת</h1>
         <p>הזן את קוד הכניסה האישי שלך</p>
         <label class="field"><span class="visually-hidden" hidden>קוד כניסה</span>
-          <input class="code-input" name="code" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required aria-label="קוד כניסה"></label>
+          <input class="code-input" name="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="10" required aria-label="קוד כניסה"></label>
         <div class="form-error">${esc(errorMsg || '')}</div>
         <button class="btn block lg" type="submit">כניסה</button>
       </form>${demo}
@@ -139,16 +139,16 @@
     setTimeout(() => input.focus(), 50);
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const code = input.value.trim();
+      const code = input.value.replace(/\D/g, '');
       if (!code) { $('.form-error', form).textContent = 'יש להזין קוד'; return; }
       const btn = $('button', form);
       busy(btn, true, 'מתחבר…');
       try {
         session = { code, role: null };
-        const res = await api('login', { code });
+        const res = await api('login', Object.assign({ code }, window.Admin.defaultRange()));
         session.role = res.role;
         store.set(LS_SESSION, session);
-        if (res.role === 'rep') { repData = res; store.set(LS_CACHE, res); }
+        if (res.role === 'rep') { repData = res; store.set(LS_CACHE, res); } else if (res.reps) window.Admin.prime(res);
         const target = res.role === 'admin' ? '#admin/reports' : '#home';
         if (location.hash === target) route(); else location.hash = target; // hashchange renders once
       } catch (err) {

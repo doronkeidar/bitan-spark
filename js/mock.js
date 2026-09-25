@@ -45,7 +45,7 @@
 
   const actions = {
     login(db, p) {
-      if (String(p.code).trim() === db.settings.admin_code) return { role: 'admin', appName: db.settings.app_name };
+      if (String(p.code).trim() === db.settings.admin_code) return Object.assign({ role: 'admin' }, actions.adminData(db, p));
       const r = rep(db, p.code);
       return {
         role: 'rep', appName: db.settings.app_name, rep: { id: r.id, name: r.name },
@@ -72,7 +72,8 @@
       admin(db, p.code);
       const { app_name, manager_emails, admin_code, reminder_hour, summary_hour, work_days, app_url } = db.settings;
       return { appName: app_name, reps: db.reps, customers: db.customers, topics: db.topics.slice().sort(byOrder),
-        settings: { app_name, manager_emails, admin_code, reminder_hour, summary_hour, work_days, app_url } };
+        settings: { app_name, manager_emails, admin_code, reminder_hour, summary_hour, work_days, app_url },
+        reports: actions.adminReports(db, p).reports, range: { from: p.from, to: p.to } };
     },
     adminReports(db, p) {
       admin(db, p.code);

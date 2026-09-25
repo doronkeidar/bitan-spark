@@ -7,6 +7,7 @@
   let data = null; // adminData payload
   let reportsFilter = null;
   let lastReports = [];
+  let primed = false; // lastReports already match reportsFilter (came with the bundle)
   let customerFilter = { q: '', repId: '' };
 
   const dateOffset = (days) => App.dayStr(new Date(Date.now() + days * 86400e3));
@@ -15,9 +16,19 @@
 
   let loading = null; // in-flight adminData request, shared so double renders don't refetch
 
+  const defaultRange = () => ({ from: dateOffset(-6), to: dateOffset(0) });
+
+  /** Take a bundle (login or adminData response): panel data + reports for its range. */
+  function prime(res) {
+    data = res;
+    reportsFilter = { from: res.range ? res.range.from : dateOffset(-6), to: res.range ? res.range.to : dateOffset(0), repId: '' };
+    lastReports = res.reports || [];
+    primed = true;
+  }
+
   async function loadData() {
     try {
-      data = await api('adminData');
+      prime(await api('adminData', reportsFilter || defaultRange()));
       return true;
     } catch (err) {
       if (err.auth) { App.logout(); toast('הקוד אינו תקף. יש להתחבר מחדש.', true); return false; }
@@ -75,7 +86,7 @@
     };
     $('#f-go').onclick = go;
     $('#f-csv').onclick = exportCsv;
-    go();
+    if (primed) { primed = false; drawReports(); } else go();
   }
 
   function drawReports() {
@@ -376,5 +387,5 @@
     });
   }
 
-  window.Admin = { render, reset() { data = null; } };
+  window.Admin = { render, prime, defaultRange, reset() { data = null; reportsFilter = null; lastReports = []; primed = false; } };
 })();
