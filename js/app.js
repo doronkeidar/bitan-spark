@@ -363,7 +363,12 @@
 
   const Dictation = (() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // Android Chrome duplicates text in continuous mode, so there we run phrase-by-phrase and restart.
+    // iOS Safari ends a non-continuous session instantly; an immediate restart there spins and freezes the page.
+    const ANDROID = /Android/i.test(navigator.userAgent);
+    const MAX_RESTARTS = 40;
     let rec = null, listening = false, base = '', sessionFinal = '', ta = null, onChange = null, stopTimer = null;
+    let restarts = 0, startedAt = 0, restartTimer = null;
 
     const join = (a, b) => (a && b ? a.replace(/\s+$/, '') + ' ' + b.trim() : (a || '') + (b || '').trim());
 
@@ -380,8 +385,10 @@
       rec = new SR();
       rec.lang = 'he-IL';
       rec.interimResults = true;
-      rec.continuous = false; // Android duplicates text in continuous mode; we restart per phrase instead
+      rec.continuous = !ANDROID;
+      startedAt = Date.now();
       rec.onresult = (e) => {
+        if (!listening) return;
         let fin = '', interim = '';
         for (let i = 0; i < e.results.length; i++) {
           const t = e.results[i][0].transcript;
@@ -394,10 +401,13 @@
       rec.onerror = (e) => {
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           listening = false;
-          toast('אין הרשאה למיקרופון. יש לאשר גישה בהגדרות הדפדפן.', true);
+          toast('אין הרשאה למיקרופון. יש לאשר גישה בהגדרות.', true);
         } else if (e.error === 'network') {
           listening = false;
           toast('ההקלטה דורשת חיבור לאינטרנט', true);
+        } else if (e.error === 'audio-capture') {
+          listening = false;
+          toast('המיקרופון לא זמין כרגע', true);
         }
       };
       rec.onend = () => {
@@ -405,7 +415,18 @@
         sessionFinal = '';
         ta.value = base;
         onChange(base);
-        if (listening) { try { startSession(); } catch (err) { listening = false; ui(); } } else ui();
+        // Restart only while still recording, never in a tight loop: sessions that die instantly stop the recording.
+        const quick = Date.now() - startedAt < 1500;
+        if (listening && restarts < MAX_RESTARTS && !(quick && restarts > 2)) {
+          restarts += 1;
+          restartTimer = setTimeout(() => {
+            if (!listening) return;
+            try { startSession(); } catch (err) { listening = false; ui(); }
+          }, quick ? 600 : 150);
+        } else {
+          listening = false;
+          ui();
+        }
       };
       rec.start();
     }
@@ -413,6 +434,7 @@
     function start() {
       base = ta.value;
       listening = true;
+      restarts = 0;
       ui();
       try { startSession(); } catch (err) { listening = false; ui(); toast('לא ניתן להפעיל הקלטה', true); }
       clearTimeout(stopTimer);
@@ -423,7 +445,11 @@
       if (!listening) return;
       listening = false;
       clearTimeout(stopTimer);
+      clearTimeout(restartTimer);
       try { rec && rec.stop(); } catch (e) { /* already stopped */ }
+      // Some browsers never fire onend after stop(); force-release so the page never stays locked.
+      const old = rec;
+      setTimeout(() => { if (!(listening && old === rec)) { try { old && old.abort(); } catch (e) { /* ignore */ } } }, 1200);
       ui();
     }
 
