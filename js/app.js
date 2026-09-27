@@ -64,7 +64,9 @@
       try {
         return await apiOnce(action, payload);
       } catch (err) {
-        if (!err.transient || i >= attempts) throw err;
+        // A request Google never ran (notRun) is safe to repeat for any action.
+        const canRetry = err.transient && (i < attempts || (err.notRun && i < 3));
+        if (!canRetry) throw err;
         await new Promise(r => setTimeout(r, 1200 * i));
       }
     }
@@ -92,6 +94,14 @@
     }
     let data;
     try { data = await res.json(); } catch (e) { throw transient('תקלה בתקשורת עם השרת. נסה שוב.'); }
+    // Google sometimes turns the POST into a GET on redirect: we then get doGet's {ok, app} reply although
+    // nothing ran. Never treat that as success (a report would look "sent" without being saved).
+    if (data && 'app' in data && !('role' in data) && !('reports' in data) && !('saved' in data)) {
+      throw Object.assign(transient('השרת לא עיבד את הבקשה. נסה שוב.'), { notRun: true });
+    }
+    if (data && data.ok && (action === 'submitReport' || action === 'updateReport') && !data.saved && !data.duplicate) {
+      throw transient('הדיווח לא אושר על ידי השרת. נסה שוב.');
+    }
     if (!data.ok) {
       const err = new Error(data.error || 'שגיאה');
       err.auth = /קוד כניסה שגוי/.test(data.error || '');
