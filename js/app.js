@@ -370,7 +370,7 @@
             value="${esc(draft.customTopic)}" style="margin-top:12px" ${draft.topicId === otherTopicId() ? '' : 'hidden'}>
         </section>
         <section class="step">
-          <div class="step-label"><span class="step-num">03</span><h3>פירוט</h3></div>
+          <div class="step-label"><span class="step-num">03</span><h3>פירוט</h3><span class="opt">לא חובה</span></div>
           <textarea class="input" id="text" placeholder="מה עלה בביקור? אפשר להקליד או להקליט" aria-label="פירוט">${esc(draft.text)}</textarea>
           <div class="dictate" id="dictate"></div>
         </section>
@@ -487,7 +487,6 @@
     if (!draft.customerId) return missing('#step-customer', 'יש לבחור לקוח');
     if (!draft.topicId) return missing('#step-topic', 'יש לבחור נושא');
     if (draft.topicId === otherTopicId() && !draft.customTopic.trim()) return missing('#step-topic', 'בחרת "אחר" - יש לכתוב את נושא הדיווח');
-    if (!draft.text.trim() && !photoCount()) return missing('#text', 'יש להוסיף פירוט או תמונה');
     const editing = draft.mode === 'edit';
     const returnTo = editing ? draft.returnTo : '#home';
     busy(btn, true, editing ? 'שומר…' : 'שולח…');
