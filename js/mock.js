@@ -11,7 +11,7 @@
     return {
       settings: {
         app_name: 'ביתן ספרק - דיווחי שטח', manager_emails: 'manager@example.com', admin_code: DEMO_CODES.admin,
-        reminder_hour: '17', summary_hour: '7', work_days: 'א,ב,ג,ד,ה', app_url: '',
+        reminder_hour: '17', reminders_active: 'כן', summary_hour: '7', work_days: 'א,ב,ג,ד,ה', app_url: '',
       },
       reps: [
         { id: 'R1', name: 'יוסי כהן', email: 'yossi@example.com', phone: '050-0000001', code: DEMO_CODES.reps[0], active: true },
@@ -82,9 +82,9 @@
     myReports(db, p) { return { reports: myReports(db, rep(db, p.code)) }; },
     adminData(db, p) {
       admin(db, p.code);
-      const { app_name, manager_emails, admin_code, reminder_hour, summary_hour, work_days, app_url } = db.settings;
+      const { app_name, manager_emails, admin_code, reminder_hour, reminders_active, summary_hour, work_days, app_url } = db.settings;
       return { appName: app_name, reps: db.reps, customers: db.customers, topics: db.topics.slice().sort(byOrder),
-        settings: { app_name, manager_emails, admin_code, reminder_hour, summary_hour, work_days, app_url },
+        settings: { app_name, manager_emails, admin_code, reminder_hour, reminders_active, summary_hour, work_days, app_url },
         reports: actions.adminReports(db, p).reports, range: { from: p.from, to: p.to } };
     },
     adminReports(db, p) {

@@ -393,6 +393,9 @@
         ${field({ key: 'app_name', label: 'שם המערכת' }, s.app_name)}
         ${field({ key: 'manager_emails', label: 'מיילים לקבלת הדוח היומי', dir: 'ltr', hint: 'ניתן להזין כמה כתובות, מופרדות בפסיק' }, s.manager_emails)}
         ${field({ key: 'reminder_hour', label: 'שעת תזכורת לנציגים', type: 'select', options: hours, hint: 'נשלחת רק לנציגים שטרם דיווחו באותו יום' }, s.reminder_hour)}
+        <div class="field"><span>תזכורות לנציגים</span>
+          <label class="check" style="margin:6px 0 0"><input type="checkbox" name="reminders_active" ${s.reminders_active === 'לא' ? '' : 'checked'}>שליחת תזכורת יומית במייל</label>
+          <small class="hint">כשהתיבה לא מסומנת, התזכורות מושהות. הדוח היומי למנהל ממשיך להישלח.</small></div>
         ${field({ key: 'summary_hour', label: 'שעת שליחת הדוח המסכם', type: 'select', options: hours, hint: 'הדוח כולל את כל הדיווחים של יום העבודה הקודם' }, s.summary_hour)}
         <div class="field"><span>ימי עבודה</span><div class="days">${DAY_LETTERS.map(d =>
           `<button type="button" class="chip" data-day="${d}" aria-pressed="${days.includes(d)}">${d}׳</button>`).join('')}</div>
@@ -418,7 +421,7 @@
     });
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const settings = { work_days: days.join(',') };
+      const settings = { work_days: days.join(','), reminders_active: form.reminders_active.checked ? 'כן' : 'לא' };
       ['app_name', 'manager_emails', 'reminder_hour', 'summary_hour', 'app_url', 'admin_code'].forEach(k => { settings[k] = form[k].value.trim(); });
       if (!/^\d{6,10}$/.test(settings.admin_code)) { $('.form-error', form).textContent = 'קוד מנהל חייב להכיל 6 עד 10 ספרות'; return; }
       const btn = $('button[type="submit"]', form);
