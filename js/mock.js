@@ -69,6 +69,7 @@
       const x = p.report || {};
       const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('יש לבחור לקוח');
       const topic = topicName(db, x);
+      if (!String(x.text || '').trim()) fail('יש לכתוב פירוט');
       if (db.reports.some(y => y.clientId && y.clientId === x.clientId)) return { duplicate: true };
       db.reports.push({
         id: Math.random().toString(36).slice(2, 10), createdAt: new Date().toISOString(), date: todayStr(), repId: r.id, repName: r.name,
@@ -84,6 +85,7 @@
       if (row.repId !== r.id) fail('ניתן לערוך רק דיווחים שלך');
       const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('יש לבחור לקוח');
       const topic = topicName(db, x);
+      if (!String(x.text || '').trim()) fail('יש לכתוב פירוט');
       const kept = (row.photos || []).filter(ph => (x.keepPhotos || []).includes(ph.url));
       Object.assign(row, { customerId: c.id, customerName: c.name, topic, text: x.text || '', updatedAt: new Date().toISOString(),
         photos: kept.concat((x.photos || []).map(() => ({ url: '#', thumb: '' }))) });
