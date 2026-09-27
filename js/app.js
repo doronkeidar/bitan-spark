@@ -358,11 +358,11 @@
       </div>
       <div class="card">
         <section class="step" id="step-customer">
-          <div class="step-label"><span class="step-num">01</span><h3>לקוח</h3><span class="opt">חובה</span></div>
+          <div class="step-label"><span class="step-num">01</span><h3>לקוח<span class="req" aria-label="שדה חובה">*</span></h3></div>
           <div id="customer-step"></div>
         </section>
         <section class="step" id="step-topic">
-          <div class="step-label"><span class="step-num">02</span><h3>נושא הדיווח</h3><span class="opt">חובה</span></div>
+          <div class="step-label"><span class="step-num">02</span><h3>נושא הדיווח<span class="req" aria-label="שדה חובה">*</span></h3></div>
           <div class="chips" role="group" aria-label="נושא הדיווח">
             ${topicList().map(t => `<button type="button" class="chip" data-topic="${esc(t.id)}" aria-pressed="${t.id === draft.topicId}">${esc(t.name)}</button>`).join('')}
           </div>
@@ -370,12 +370,12 @@
             value="${esc(draft.customTopic)}" style="margin-top:12px" ${draft.topicId === otherTopicId() ? '' : 'hidden'}>
         </section>
         <section class="step">
-          <div class="step-label"><span class="step-num">03</span><h3>פירוט</h3><span class="opt">לא חובה</span></div>
+          <div class="step-label"><span class="step-num">03</span><h3>פירוט</h3></div>
           <textarea class="input" id="text" placeholder="מה עלה בביקור? אפשר להקליד או להקליט" aria-label="פירוט">${esc(draft.text)}</textarea>
           <div class="dictate" id="dictate"></div>
         </section>
         <section class="step">
-          <div class="step-label"><span class="step-num">04</span><h3>תמונות</h3><span class="opt">לא חובה · עד ${MAX_PHOTOS}</span></div>
+          <div class="step-label"><span class="step-num">04</span><h3>תמונות</h3><span class="opt">עד ${MAX_PHOTOS}</span></div>
           <div class="photo-grid" id="photos"></div>
           <input type="file" id="file" class="file-hidden" accept="image/*" multiple>
           <button type="button" class="btn secondary block" id="add-photo">הוספת תמונה</button>

@@ -330,3 +330,5 @@ textarea.listening { border-color: var(--accent-line); background: #FFFCFB; }
 
 .center-load { display: flex; justify-content: center; padding: 60px 0; }
 .center-load .spinner { width: 26px; height: 26px; border-color: var(--line); border-top-color: var(--accent); }
+
+.req { color: var(--accent); font-weight: 700; margin-inline-start: 3px; }
