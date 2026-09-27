@@ -41,7 +41,17 @@
 
   function rep(db, code) { return db.reps.find(r => r.active && r.code === String(code || '').trim()) || fail('קוד כניסה שגוי'); }
   function admin(db, code) { if (String(code || '').trim() !== db.settings.admin_code) fail('קוד כניסה שגוי'); }
-  function myReports(db, r) { return db.reports.filter(x => x.repId === r.id).slice(-40).reverse(); }
+  function myReports(db, r, from, to) {
+    const mine = db.reports.filter(x => x.repId === r.id);
+    return (from || to ? mine.filter(x => x.date >= (from || '0') && x.date <= (to || '9')) : mine.slice(-40)).reverse();
+  }
+  function topicName(db, x) {
+    const t = x.topicId === 'OTHER' ? { name: 'אחר' } : db.topics.find(t => t.id === x.topicId);
+    if (!t) fail('יש לבחור נושא');
+    if (t.name !== 'אחר') return t.name;
+    if (!String(x.customTopic || '').trim()) fail('בחרת "אחר" - יש לכתוב את נושא הדיווח');
+    return 'אחר: ' + String(x.customTopic).trim();
+  }
 
   const actions = {
     login(db, p) {
@@ -57,12 +67,12 @@
     submitReport(db, p) {
       const r = rep(db, p.code);
       const x = p.report || {};
-      const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('הלקוח לא נמצא');
-      const t = db.topics.find(t => t.id === x.topicId) || fail('יש לבחור נושא');
+      const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('יש לבחור לקוח');
+      const topic = topicName(db, x);
       if (db.reports.some(y => y.clientId && y.clientId === x.clientId)) return { duplicate: true };
       db.reports.push({
         id: Math.random().toString(36).slice(2, 10), createdAt: new Date().toISOString(), date: todayStr(), repId: r.id, repName: r.name,
-        customerId: c.id, customerName: c.name, topic: t.name, text: x.text || '', clientId: x.clientId,
+        customerId: c.id, customerName: c.name, topic, text: x.text || '', clientId: x.clientId,
         photos: (x.photos || []).map(() => ({ url: '#', thumb: '' })),
       });
       return { saved: true };
@@ -72,14 +82,14 @@
       const x = p.report || {};
       const row = db.reports.find(y => y.id === x.id) || fail('הדיווח לא נמצא');
       if (row.repId !== r.id) fail('ניתן לערוך רק דיווחים שלך');
-      const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('הלקוח לא נמצא');
-      const t = db.topics.find(t => t.id === x.topicId) || fail('יש לבחור נושא');
+      const c = db.customers.find(c => c.id === x.customerId && c.repId === r.id) || fail('יש לבחור לקוח');
+      const topic = topicName(db, x);
       const kept = (row.photos || []).filter(ph => (x.keepPhotos || []).includes(ph.url));
-      Object.assign(row, { customerId: c.id, customerName: c.name, topic: t.name, text: x.text || '', updatedAt: new Date().toISOString(),
+      Object.assign(row, { customerId: c.id, customerName: c.name, topic, text: x.text || '', updatedAt: new Date().toISOString(),
         photos: kept.concat((x.photos || []).map(() => ({ url: '#', thumb: '' }))) });
       return { saved: true };
     },
-    myReports(db, p) { return { reports: myReports(db, rep(db, p.code)) }; },
+    myReports(db, p) { return { reports: myReports(db, rep(db, p.code), p.from, p.to) }; },
     adminData(db, p) {
       admin(db, p.code);
       const { app_name, manager_emails, admin_code, reminder_hour, reminders_active, summary_hour, work_days, app_url } = db.settings;

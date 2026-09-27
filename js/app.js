@@ -198,20 +198,24 @@
 
   function renderHome() {
     const d = repData;
-    const today = (d.reports || []).filter(r => dayStr(r.createdAt) === todayStr()).length;
+    const todays = (d.reports || []).filter(r => dayStr(r.createdAt) === todayStr());
+    const today = todays.length;
     const status = today
       ? `<div class="status done"><span>נשלחו היום <b>${today}</b> ${today === 1 ? 'דיווח' : 'דיווחים'}</span></div>`
       : `<div class="status"><span>טרם נשלח דיווח היום</span></div>`;
-    const list = (d.reports || []).length
-      ? `<div class="report-list">${d.reports.slice(0, 20).map(r => reportCard(r, { clamp: true, editable: true })).join('')}</div>`
-      : `<div class="empty">עדיין לא נשלחו דיווחים</div>`;
+    const list = today
+      ? `<div class="report-list">${todays.map(r => reportCard(r, { clamp: true, editable: true })).join('')}</div>`
+      : `<div class="empty">עדיין לא נשלחו דיווחים היום</div>`;
     const app = mount(shell(`
       <div class="page-head"><p class="eyebrow">${esc(longToday())}</p><h1>שלום, ${esc(d.rep.name)}</h1></div>
       ${status}
-      <a class="btn block lg" href="#new">דיווח חדש</a>
-      <div class="section-title"><h2>הדיווחים האחרונים שלי</h2><button class="link-btn" data-act="refresh">רענון</button></div>
+      <div class="home-actions">
+        <a class="btn block lg" href="#new">דיווח חדש</a>
+        <a class="btn secondary block lg" href="#history">הדיווחים שלי</a>
+      </div>
+      <div class="section-title"><h2>הדיווחים של היום</h2><button class="link-btn" data-act="refresh">רענון</button></div>
       ${list}`, { user: d.rep.name }));
-    $$('[data-edit]', app).forEach(b => b.onclick = () => { location.hash = '#edit/' + b.dataset.edit; });
+    $$('[data-edit]', app).forEach(b => b.onclick = () => { editReturn = '#home'; location.hash = '#edit/' + b.dataset.edit; });
     $('[data-act="refresh"]', app).onclick = async (e) => {
       busy(e.target, true);
       await refreshRep(true);
@@ -233,18 +237,111 @@
     }
   }
 
+  /* ------------------------------------------------------------ rep: history (day / month / year) */
+
+  const hist = { mode: 'month', day: '', month: '', year: '', reports: [] };
+  const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+  function historyRange() {
+    // Dates are compared as yyyy-MM-dd strings, so "-31" safely closes any month.
+    if (hist.mode === 'day') return { from: hist.day, to: hist.day };
+    if (hist.mode === 'month') return { from: hist.month + '-01', to: hist.month + '-31' };
+    return { from: hist.year + '-01-01', to: hist.year + '-12-31' };
+  }
+
+  function historyLabel() {
+    if (hist.mode === 'day') {
+      return new Date(hist.day + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    if (hist.mode === 'month') {
+      const [y, m] = hist.month.split('-');
+      return `${MONTHS[Number(m) - 1]} ${y}`;
+    }
+    return `שנת ${hist.year}`;
+  }
+
+  function renderHistory() {
+    const t = todayStr();
+    hist.day = hist.day || t;
+    hist.month = hist.month || t.slice(0, 7);
+    hist.year = hist.year || t.slice(0, 4);
+    const thisYear = Number(t.slice(0, 4));
+    const years = Array.from({ length: 4 }, (_, i) => String(thisYear - i));
+    const picker = {
+      day: `<input class="input" type="date" id="h-val" value="${hist.day}" max="${t}" aria-label="בחירת יום">`,
+      month: `<input class="input" type="month" id="h-val" value="${hist.month}" max="${t.slice(0, 7)}" aria-label="בחירת חודש">`,
+      year: `<select class="input" id="h-val" aria-label="בחירת שנה">${years.map(y => `<option ${y === hist.year ? 'selected' : ''}>${y}</option>`).join('')}</select>`,
+    }[hist.mode];
+    const app = mount(shell(`
+      <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+        <div><p class="eyebrow">הדיווחים שלי</p><h1>דיווחים קודמים</h1></div>
+        <a class="link-btn" href="#home">חזרה</a>
+      </div>
+      <div class="card card-pad" style="margin-bottom:18px">
+        <div class="chips" role="group" aria-label="תקופה" style="margin-bottom:14px">
+          ${[['day', 'יום'], ['month', 'חודש'], ['year', 'שנה']].map(([k, l]) =>
+            `<button type="button" class="chip" data-mode="${k}" aria-pressed="${hist.mode === k}">${l}</button>`).join('')}
+        </div>
+        ${picker}
+      </div>
+      <div id="h-results"><div class="center-load"><span class="spinner"></span></div></div>`, { user: repData.rep.name }));
+    $$('[data-mode]', app).forEach(b => b.onclick = () => { hist.mode = b.dataset.mode; renderHistory(); });
+    $('#h-val', app).onchange = (e) => {
+      if (!e.target.value) return;
+      hist[hist.mode] = e.target.value;
+      loadHistory();
+    };
+    loadHistory();
+  }
+
+  async function loadHistory() {
+    const box = $('#h-results');
+    if (!box) return;
+    box.innerHTML = `<div class="center-load"><span class="spinner"></span></div>`;
+    const label = historyLabel();
+    try {
+      const res = await api('myReports', historyRange());
+      hist.reports = res.reports || [];
+      if (!$('#h-results')) return; // user navigated away
+      const n = hist.reports.length;
+      $('#h-results').innerHTML = `<p class="small muted" style="margin:0 0 10px">${esc(label)} · ${n === 1 ? 'דיווח אחד' : `${n} דיווחים`}</p>` +
+        (n ? `<div class="report-list">${hist.reports.map(r => reportCard(r, { editable: true })).join('')}</div>`
+           : `<div class="empty">אין דיווחים בתקופה הזו</div>`);
+      $$('#h-results [data-edit]').forEach(b => b.onclick = () => { editReturn = '#history'; location.hash = '#edit/' + b.dataset.edit; });
+    } catch (err) {
+      if (!$('#h-results')) return;
+      $('#h-results').innerHTML = `<div class="empty">${esc(err.message)}<br><button class="link-btn accent" id="h-retry" style="margin-top:8px">נסה שוב</button></div>`;
+      $('#h-retry').onclick = loadHistory;
+    }
+  }
+
   /* ------------------------------------------------------------ rep: new report */
 
   // draft.mode: 'new' | 'edit'. keep = photos already saved on the report (edit mode) that stay attached.
   let draft = null;
-  const newDraft = () => ({ mode: 'new', clientId: uid(), customerId: '', topicId: '', text: '', photos: [], keep: [] });
+  let editReturn = '#home'; // screen to go back to after editing (home or history)
+  const OTHER = 'אחר';
+  /** Topics shown to the rep; "אחר" (free-text topic) is always offered, last. */
+  const topicList = () => {
+    const list = repData.topics.slice();
+    if (!list.some(t => t.name === OTHER)) list.push({ id: 'OTHER', name: OTHER });
+    return list;
+  };
+  const otherTopicId = () => topicList().find(t => t.name === OTHER).id;
+  const newDraft = () => ({ mode: 'new', clientId: uid(), customerId: '', topicId: '', customTopic: '', text: '', photos: [], keep: [] });
   const editDraft = (r) => {
-    const topic = repData.topics.find(t => t.name === r.topic);
-    return { mode: 'edit', id: r.id, customerId: r.customerId || '', topicId: topic ? topic.id : '', text: r.text || '', photos: [], keep: (r.photos || []).slice(), createdAt: r.createdAt };
+    const isOther = String(r.topic || '').startsWith(OTHER + ':');
+    const topic = isOther ? { id: otherTopicId() } : topicList().find(t => t.name === r.topic);
+    return {
+      mode: 'edit', id: r.id, customerId: r.customerId || '', topicId: topic ? topic.id : '',
+      customTopic: isOther ? r.topic.slice(OTHER.length + 1).trim() : '',
+      text: r.text || '', photos: [], keep: (r.photos || []).slice(), createdAt: r.createdAt,
+      returnTo: editReturn,
+    };
   };
 
   function renderEdit(id) {
-    const r = (repData.reports || []).find(x => x.id === id);
+    const r = (repData.reports || []).concat(hist.reports).find(x => x.id === id);
     if (!r) { location.hash = '#home'; return; }
     if (!draft || draft.mode !== 'edit' || draft.id !== id) draft = editDraft(r);
     renderNew();
@@ -257,18 +354,20 @@
     const app = mount(shell(`
       <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
         <div><p class="eyebrow">${esc(editing ? `דיווח מ${when(draft.createdAt)}` : longToday())}</p><h1>${editing ? 'עריכת דיווח' : 'דיווח חדש'}</h1></div>
-        <a class="link-btn" href="#home">${editing ? 'ביטול' : 'חזרה'}</a>
+        <a class="link-btn" href="${editing ? draft.returnTo : '#home'}">${editing ? 'ביטול' : 'חזרה'}</a>
       </div>
       <div class="card">
-        <section class="step">
-          <div class="step-label"><span class="step-num">01</span><h3>לקוח</h3></div>
+        <section class="step" id="step-customer">
+          <div class="step-label"><span class="step-num">01</span><h3>לקוח</h3><span class="opt">חובה</span></div>
           <div id="customer-step"></div>
         </section>
-        <section class="step">
-          <div class="step-label"><span class="step-num">02</span><h3>נושא הדיווח</h3></div>
+        <section class="step" id="step-topic">
+          <div class="step-label"><span class="step-num">02</span><h3>נושא הדיווח</h3><span class="opt">חובה</span></div>
           <div class="chips" role="group" aria-label="נושא הדיווח">
-            ${d.topics.map(t => `<button type="button" class="chip" data-topic="${esc(t.id)}" aria-pressed="${t.id === draft.topicId}">${esc(t.name)}</button>`).join('')}
+            ${topicList().map(t => `<button type="button" class="chip" data-topic="${esc(t.id)}" aria-pressed="${t.id === draft.topicId}">${esc(t.name)}</button>`).join('')}
           </div>
+          <input class="input" id="custom-topic" maxlength="80" placeholder="כתוב את נושא הדיווח" aria-label="נושא אחר"
+            value="${esc(draft.customTopic)}" style="margin-top:12px" ${draft.topicId === otherTopicId() ? '' : 'hidden'}>
         </section>
         <section class="step">
           <div class="step-label"><span class="step-num">03</span><h3>פירוט</h3></div>
@@ -285,9 +384,14 @@
       <div class="submit-bar"><button class="btn block lg" id="submit">${editing ? 'שמירת השינויים' : 'שליחת הדיווח'}</button></div>`, { user: d.rep.name }));
 
     renderCustomerStep();
+    const custom = $('#custom-topic', app);
+    custom.oninput = () => { draft.customTopic = custom.value; };
     $$('.chip[data-topic]', app).forEach(ch => ch.onclick = () => {
       draft.topicId = ch.dataset.topic;
       $$('.chip[data-topic]', app).forEach(c => c.setAttribute('aria-pressed', c === ch));
+      const isOther = draft.topicId === otherTopicId();
+      custom.hidden = !isOther;
+      if (isOther) custom.focus();
     });
     const ta = $('#text', app);
     ta.oninput = () => { draft.text = ta.value; };
@@ -378,14 +482,18 @@
     const btn = e.currentTarget;
     Dictation.stop();
     draft.text = $('#text').value;
-    if (!draft.customerId) return toast('יש לבחור לקוח', true);
-    if (!draft.topicId) return toast('יש לבחור נושא', true);
-    if (!draft.text.trim() && !photoCount()) return toast('יש להוסיף פירוט או תמונה', true);
+    draft.customTopic = $('#custom-topic').value;
+    const missing = (sel, msg) => { const el = $(sel); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast(msg, true); };
+    if (!draft.customerId) return missing('#step-customer', 'יש לבחור לקוח');
+    if (!draft.topicId) return missing('#step-topic', 'יש לבחור נושא');
+    if (draft.topicId === otherTopicId() && !draft.customTopic.trim()) return missing('#step-topic', 'בחרת "אחר" - יש לכתוב את נושא הדיווח');
+    if (!draft.text.trim() && !photoCount()) return missing('#text', 'יש להוסיף פירוט או תמונה');
     const editing = draft.mode === 'edit';
+    const returnTo = editing ? draft.returnTo : '#home';
     busy(btn, true, editing ? 'שומר…' : 'שולח…');
     try {
       const report = {
-        customerId: draft.customerId, topicId: draft.topicId, text: draft.text.trim(),
+        customerId: draft.customerId, topicId: draft.topicId, customTopic: draft.customTopic.trim(), text: draft.text.trim(),
         photos: draft.photos.map(p => ({ data: p.data, mime: p.mime })),
       };
       if (editing) await api('updateReport', { report: Object.assign(report, { id: draft.id, keepPhotos: draft.keep.map(p => p.url) }) });
@@ -393,7 +501,7 @@
       draft = null;
       toast(editing ? 'הדיווח עודכן' : 'הדיווח נשלח בהצלחה');
       await refreshRep(false);
-      location.hash = '#home';
+      location.hash = returnTo;
     } catch (err) {
       busy(btn, false);
       toast(err.message, true);
@@ -525,6 +633,7 @@
     }
     if (!repData) return renderLogin();
     if (h === '#new') return renderNew();
+    if (h === '#history') return renderHistory();
     if (h.startsWith('#edit/')) return renderEdit(decodeURIComponent(h.slice(6)));
     return renderHome();
   }
@@ -538,7 +647,7 @@
     if (session && session.role === 'rep') {
       if (repData) route(); else mount(`<div class="center-load"><span class="spinner"></span></div>`);
       const ok = await refreshRep(false);
-      if (ok && location.hash !== '#new' && !location.hash.startsWith('#edit/')) route();
+      if (ok && location.hash !== '#new' && location.hash !== '#history' && !location.hash.startsWith('#edit/')) route();
       else if (!repData && session) renderLogin();
       return;
     }
