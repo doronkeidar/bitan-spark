@@ -54,9 +54,26 @@
 
   /* ------------------------------------------------------------ API */
 
+  // Google sometimes answers the first request after idle with an HTML error page or drops it.
+  // These actions are safe to repeat (reads; submitReport is de-duplicated by clientId), so retry quietly.
+  const RETRYABLE = ['login', 'adminData', 'adminReports', 'myReports', 'submitReport'];
+
   async function api(action, payload = {}) {
+    const attempts = RETRYABLE.includes(action) ? 3 : 1;
+    for (let i = 1; ; i++) {
+      try {
+        return await apiOnce(action, payload);
+      } catch (err) {
+        if (!err.transient || i >= attempts) throw err;
+        await new Promise(r => setTimeout(r, 1200 * i));
+      }
+    }
+  }
+
+  async function apiOnce(action, payload) {
     const body = Object.assign({ action, code: session && session.code }, payload);
     if (DEMO) return MockApi.call(action, body);
+    const transient = (msg) => Object.assign(new Error(msg), { transient: true });
     let res;
     const ctrl = window.AbortController ? new AbortController() : null;
     const timer = ctrl && setTimeout(() => ctrl.abort(), action === 'submitReport' ? 120000 : 45000);
@@ -69,12 +86,12 @@
         signal: ctrl ? ctrl.signal : undefined,
       });
     } catch (e) {
-      throw new Error(e && e.name === 'AbortError' ? 'השרת לא הגיב בזמן. נסה שוב.' : 'אין חיבור לאינטרנט. נסה שוב.');
+      throw transient(e && e.name === 'AbortError' ? 'השרת לא הגיב בזמן. נסה שוב.' : 'אין חיבור לאינטרנט. נסה שוב.');
     } finally {
       clearTimeout(timer);
     }
     let data;
-    try { data = await res.json(); } catch (e) { throw new Error('תקלה בתקשורת עם השרת. נסה שוב.'); }
+    try { data = await res.json(); } catch (e) { throw transient('תקלה בתקשורת עם השרת. נסה שוב.'); }
     if (!data.ok) {
       const err = new Error(data.error || 'שגיאה');
       err.auth = /קוד כניסה שגוי/.test(data.error || '');
