@@ -78,7 +78,9 @@
       if (('#admin/' + tab) !== location.hash && location.hash.startsWith('#admin/')) return; // a newer render took over
     }
     const app = mount(shell(`
-      <div class="page-head"><p class="eyebrow">ממשק ניהול</p><h1>${esc(data.appName)}</h1></div>
+      <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <div><p class="eyebrow">ממשק ניהול</p><h1>${esc(data.appName)}</h1></div>
+        ${data.sheetUrl ? `<a class="link-btn" href="${esc(data.sheetUrl)}" target="_blank" rel="noopener">פתיחת הגיליון ב-Google Sheets</a>` : ''}</div>
       <nav class="tabs" role="tablist">${TABS.map(([k, label]) =>
         `<button class="tab" role="tab" aria-selected="${k === tab}" data-tab="${k}">${label}</button>`).join('')}</nav>
       <div id="tab-body"></div>`, { user: 'מנהל', wide: true }));
@@ -253,7 +255,15 @@
     $('#add', box).onclick = () => repForm({ active: true, code: randomCode() });
   }
 
-  const randomCode = () => String(100000 + Math.floor(Math.random() * 900000));
+  /** Random 3-digit code not used by another rep (or the admin code). */
+  const randomCode = () => {
+    const used = new Set(data.reps.map(r => String(r.code)).concat([String(data.settings.admin_code)]));
+    for (let i = 0; i < 200; i++) {
+      const c = String(100 + Math.floor(Math.random() * 900));
+      if (!used.has(c)) return c;
+    }
+    return String(1000 + Math.floor(Math.random() * 9000));
+  };
 
   function repForm(rec) {
     openForm({
@@ -263,7 +273,7 @@
         { key: 'name', label: 'שם מלא' },
         { key: 'phone', label: 'טלפון', type: 'tel', dir: 'ltr' },
         { key: 'email', label: 'מייל', type: 'email', dir: 'ltr', hint: 'לכתובת זו יישלחו התזכורות היומיות' },
-        { key: 'code', label: 'קוד כניסה', inputmode: 'numeric', dir: 'ltr', hint: '4 עד 8 ספרות. הנציג מזין אותו פעם אחת באפליקציה.',
+        { key: 'code', label: 'קוד כניסה', inputmode: 'numeric', dir: 'ltr', hint: '3 עד 8 ספרות. הנציג מזין אותו פעם אחת באפליקציה.',
           extra: '<button type="button" class="link-btn accent" data-gen style="margin-top:6px">יצירת קוד חדש</button>' },
         { key: 'active', label: 'נציג פעיל', type: 'checkbox' },
       ],

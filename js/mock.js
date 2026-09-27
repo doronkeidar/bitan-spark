@@ -97,7 +97,7 @@
       const rec = Object.assign({}, p.record, { active: p.record.active !== false });
       if (!rec.name) fail('יש למלא שם');
       if (p.table === 'reps') {
-        if (!/^\d{4,8}$/.test(rec.code || '')) fail('קוד כניסה חייב להיות 4 עד 8 ספרות');
+        if (!/^\d{3,8}$/.test(rec.code || '')) fail('קוד כניסה חייב להיות 3 עד 8 ספרות');
         if (db.reps.some(r => r.code === rec.code && r.id !== rec.id) || rec.code === db.settings.admin_code) fail('הקוד כבר בשימוש');
       }
       if (p.table === 'customers' && !db.reps.some(r => r.id === rec.repId)) fail('יש לבחור נציג');
