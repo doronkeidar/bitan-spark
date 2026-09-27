@@ -109,6 +109,15 @@
       } else list[i] = Object.assign(list[i], rec);
       return { record: rec };
     },
+    adminDelete(db, p) {
+      admin(db, p.code);
+      const list = db[p.table] || fail('טבלה לא מוכרת');
+      if (p.table === 'reps' && db.customers.some(c => c.repId === p.id)) fail('לנציג זה משויכים לקוחות. יש להעביר אותם לנציג אחר או למחוק אותם לפני מחיקת הנציג.');
+      const i = list.findIndex(x => x.id === p.id);
+      if (i === -1) fail('הרשומה לא נמצאה');
+      list.splice(i, 1);
+      return { deleted: true };
+    },
     adminImportCustomers(db, p) {
       admin(db, p.code);
       let n = Math.max(0, ...db.customers.map(x => Number(x.id.replace(/\D/g, '')) || 0));

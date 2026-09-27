@@ -173,19 +173,34 @@
     return `<label class="field"><span>${f.label}</span>${control}${f.extra || ''}${f.hint ? `<small class="hint">${f.hint}</small>` : ''}</label>`;
   }
 
-  function openForm({ title, fields, values = {}, submitLabel = 'שמירה', onSubmit, onOpen }) {
+  function openForm({ title, fields, values = {}, submitLabel = 'שמירה', onSubmit, onOpen, onDelete, deleteConfirm }) {
     const root = $('#modal-root');
     root.innerHTML = `<div class="modal-backdrop"><form class="modal" novalidate>
       <div class="modal-head"><h2>${title}</h2><button type="button" class="link-btn" data-close>סגירה</button></div>
       ${fields.map(f => field(f, values[f.key])).join('')}
       <div class="form-error"></div>
       <div class="modal-actions"><button class="btn" type="submit">${submitLabel}</button><button class="btn secondary" type="button" data-close>ביטול</button></div>
+      ${onDelete ? `<div style="text-align:center;margin-top:16px"><button type="button" class="link-btn accent" data-delete>מחיקה לצמיתות</button></div>` : ''}
     </form></div>`;
     const form = $('form', root);
     const close = () => { root.innerHTML = ''; };
     $$('[data-close]', root).forEach(b => b.onclick = close);
     $('.modal-backdrop', root).onclick = (e) => { if (e.target.classList.contains('modal-backdrop')) close(); };
     if (onOpen) onOpen(form);
+    if (onDelete) {
+      const delBtn = $('[data-delete]', form);
+      delBtn.onclick = async () => {
+        if (!confirm(deleteConfirm || 'למחוק לצמיתות? לא ניתן לבטל פעולה זו.')) return;
+        busy(delBtn, true, 'מוחק…');
+        try {
+          await onDelete();
+          close();
+        } catch (err) {
+          busy(delBtn, false);
+          $('.form-error', form).textContent = err.message;
+        }
+      };
+    }
     form.onsubmit = async (e) => {
       e.preventDefault();
       const out = {};
@@ -206,6 +221,13 @@
 
   async function saveRecord(tableName, record, okMsg) {
     await api('adminSave', { table: tableName, record });
+    await loadData();
+    toast(okMsg);
+    render(location.hash.slice(7) || 'reports');
+  }
+
+  async function deleteRecord(tableName, id, okMsg) {
+    await api('adminDelete', { table: tableName, id });
     await loadData();
     toast(okMsg);
     render(location.hash.slice(7) || 'reports');
@@ -247,6 +269,8 @@
       ],
       onOpen: (form) => { $('[data-gen]', form).onclick = () => { form.code.value = randomCode(); }; },
       onSubmit: (v) => saveRecord('reps', Object.assign({ id: rec.id }, v), 'הנציג נשמר'),
+      onDelete: rec.id ? () => deleteRecord('reps', rec.id, 'הנציג נמחק') : null,
+      deleteConfirm: `למחוק לצמיתות את ${rec.name || 'הנציג'}? דיווחים קודמים שלו יישמרו.`,
     });
   }
 
@@ -301,6 +325,8 @@
         { key: 'active', label: 'לקוח פעיל', type: 'checkbox' },
       ],
       onSubmit: (v) => saveRecord('customers', Object.assign({ id: rec.id }, v), 'הלקוח נשמר'),
+      onDelete: rec.id ? () => deleteRecord('customers', rec.id, 'הלקוח נמחק') : null,
+      deleteConfirm: `למחוק לצמיתות את ${rec.name || 'הלקוח'}? דיווחים קודמים עליו יישמרו.`,
     });
   }
 
@@ -351,6 +377,8 @@
         { key: 'active', label: 'נושא פעיל', type: 'checkbox' },
       ],
       onSubmit: (v) => saveRecord('topics', Object.assign({ id: rec.id }, v), 'הנושא נשמר'),
+      onDelete: rec.id ? () => deleteRecord('topics', rec.id, 'הנושא נמחק') : null,
+      deleteConfirm: `למחוק לצמיתות את הנושא "${rec.name || ''}"? דיווחים קודמים יישמרו.`,
     });
   }
 
