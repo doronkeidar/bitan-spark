@@ -254,7 +254,7 @@
 
   function tabCustomers(box) {
     box.innerHTML = `<div class="toolbar">
-        <label class="field grow"><span>חיפוש</span><input id="c-q" type="search" placeholder="שם לקוח, עיר או איש קשר" value="${esc(customerFilter.q)}"></label>
+        <label class="field grow"><span>חיפוש</span><input id="c-q" type="search" placeholder="שם לקוח, מספר לקוח, עיר או איש קשר" value="${esc(customerFilter.q)}"></label>
         <label class="field"><span>נציג</span><select id="c-rep"><option value="">כל הנציגים</option>
           ${data.reps.map(r => `<option value="${esc(r.id)}" ${r.id === customerFilter.repId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></label>
         <button class="btn secondary" id="import">ייבוא מאקסל</button>
@@ -265,12 +265,13 @@
       const q = customerFilter.q;
       const rows = data.customers
         .filter(c => (!customerFilter.repId || c.repId === customerFilter.repId) &&
-          (!q || [c.name, c.city, c.contact].some(v => (v || '').includes(q))))
+          (!q || [c.name, c.city, c.contact, c.number].some(v => String(v || '').includes(q))))
         .sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name, 'he'));
       const shown = rows.slice(0, 300);
       $('#c-list').innerHTML = `<p class="small muted" style="margin:0 0 10px">${rows.length} לקוחות${rows.length > shown.length ? ` · מוצגים ${shown.length} הראשונים, יש לצמצם בחיפוש` : ''}</p>` +
         table([
           { label: 'שם לקוח', key: 'name' },
+          { label: 'מספר לקוח', key: 'number', cls: 'num' },
           { label: 'עיר', key: 'city' },
           { label: 'איש קשר', key: 'contact' },
           { label: 'טלפון', key: 'phone', cls: 'num' },
@@ -292,6 +293,7 @@
       values: rec,
       fields: [
         { key: 'name', label: 'שם לקוח' },
+        { key: 'number', label: 'מספר לקוח', inputmode: 'numeric', dir: 'ltr' },
         { key: 'city', label: 'עיר' },
         { key: 'contact', label: 'איש קשר' },
         { key: 'phone', label: 'טלפון', type: 'tel', dir: 'ltr' },
@@ -308,17 +310,17 @@
       submitLabel: 'ייבוא',
       fields: [{
         key: 'paste', label: 'העתק מאקסל והדבק כאן', type: 'textarea', rows: 9,
-        placeholder: 'שם לקוח	עיר	איש קשר	טלפון	שם נציג',
-        hint: 'סדר העמודות: שם לקוח, עיר, איש קשר, טלפון, שם נציג. שם הנציג חייב להיות זהה לשם שמופיע בלשונית "נציגים". שורת כותרות, אם קיימת, תדולג.',
+        placeholder: 'שם לקוח	מספר לקוח	עיר	איש קשר	טלפון	שם נציג',
+        hint: 'סדר העמודות: שם לקוח, מספר לקוח, עיר, איש קשר, טלפון, שם נציג. שם הנציג חייב להיות זהה לשם שבלשונית "נציגים". שורת כותרות, אם קיימת, תדולג. לקוח שמספרו כבר קיים לא ייובא שוב.',
       }],
       onSubmit: async (v) => {
         const lines = v.paste.split(/\r?\n/).map(l => l.split('\t').map(s => s.trim())).filter(c => c.some(Boolean));
-        if (lines.length && /שם/.test(lines[0][0] || '') && /נציג/.test(lines[0][4] || '')) lines.shift();
+        if (lines.length && /שם/.test(lines[0][0] || '') && /נציג|סוכן/.test(lines[0][5] || '')) lines.shift();
         if (!lines.length) throw new Error('לא הודבקו שורות');
-        const rows = lines.map(([name, city, contact, phone, repNameCell]) => ({ name, city, contact, phone, repName: repNameCell }));
+        const rows = lines.map(([name, number, city, contact, phone, repNameCell]) => ({ name, number, city, contact, phone, repName: repNameCell }));
         const res = await api('adminImportCustomers', { rows });
         await loadData();
-        toast(`יובאו ${res.imported} לקוחות`);
+        toast(`יובאו ${res.imported} לקוחות${res.skipped ? ` · ${res.skipped} כבר קיימים` : ''}`);
         render('customers');
       },
     });

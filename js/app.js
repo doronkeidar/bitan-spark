@@ -286,8 +286,9 @@
     const list = repData.customers;
     const sel = list.find(c => c.id === draft.customerId);
     if (sel) {
+      const sub = [sel.city, sel.number ? `לקוח ${sel.number}` : ''].filter(Boolean).join(' · ');
       box.innerHTML = `<div class="picker-selected"><div><div class="t">${esc(sel.name)}</div>
-        ${sel.city ? `<div class="s">${esc(sel.city)}</div>` : ''}</div><button type="button" class="link-btn">החלפה</button></div>`;
+        ${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><button type="button" class="link-btn">החלפה</button></div>`;
       $('button', box).onclick = () => { draft.customerId = ''; renderCustomerStep(); $('#cust-q').focus(); };
       return;
     }
@@ -295,14 +296,15 @@
       box.innerHTML = `<div class="empty">לא משויכים אליך לקוחות. יש לפנות למנהל המכירות.</div>`;
       return;
     }
-    box.innerHTML = `<input class="input" id="cust-q" type="search" placeholder="חיפוש לפי שם או עיר" autocomplete="off" aria-label="חיפוש לקוח">
+    box.innerHTML = `<input class="input" id="cust-q" type="search" placeholder="חיפוש לפי שם, עיר או מספר לקוח" autocomplete="off" aria-label="חיפוש לקוח">
       <div class="picker-list" id="cust-list"></div>`;
     const q = $('#cust-q', box);
     const draw = () => {
       const term = q.value.trim();
-      const hits = list.filter(c => !term || c.name.includes(term) || (c.city || '').includes(term));
+      const hits = list.filter(c => !term || c.name.includes(term) || (c.city || '').includes(term) || String(c.number || '').includes(term));
       $('#cust-list', box).innerHTML = hits.length
-        ? hits.map(c => `<button type="button" class="row-btn" data-id="${esc(c.id)}"><span>${esc(c.name)}</span><span class="s">${esc(c.city || '')}</span></button>`).join('')
+        ? hits.slice(0, 150).map(c => `<button type="button" class="row-btn" data-id="${esc(c.id)}"><span>${esc(c.name)}</span>
+            <span class="s">${esc([c.city, c.number].filter(Boolean).join(' · '))}</span></button>`).join('')
         : `<div class="picker-empty">לא נמצאו לקוחות</div>`;
       $$('.row-btn', box).forEach(b => b.onclick = () => { draft.customerId = b.dataset.id; renderCustomerStep(); });
     };

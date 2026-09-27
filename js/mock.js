@@ -112,17 +112,21 @@
     adminImportCustomers(db, p) {
       admin(db, p.code);
       let n = Math.max(0, ...db.customers.map(x => Number(x.id.replace(/\D/g, '')) || 0));
+      const known = new Set(db.customers.map(c => c.number).filter(Boolean));
       const errors = [];
       const add = [];
+      let skipped = 0;
       p.rows.forEach((row, i) => {
         const r = db.reps.find(r => r.name === String(row.repName || '').trim());
         if (!row.name) return;
         if (!r) { errors.push(`שורה ${i + 1}: נציג "${row.repName || ''}" לא נמצא`); return; }
-        add.push({ id: 'C' + (++n), name: row.name, city: row.city || '', contact: row.contact || '', phone: row.phone || '', repId: r.id, active: true });
+        if (row.number && known.has(row.number)) { skipped++; return; }
+        if (row.number) known.add(row.number);
+        add.push({ id: 'C' + (++n), name: row.name, number: row.number || '', city: row.city || '', contact: row.contact || '', phone: row.phone || '', repId: r.id, active: true });
       });
       if (errors.length) fail(errors.slice(0, 8).join('\n'));
       db.customers.push(...add);
-      return { imported: add.length };
+      return { imported: add.length, skipped };
     },
     adminSaveSettings(db, p) { admin(db, p.code); Object.assign(db.settings, p.settings); return { saved: true }; },
     adminTest(db, p) { admin(db, p.code); return { sent: true }; },
